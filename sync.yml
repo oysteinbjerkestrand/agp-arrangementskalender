@@ -1,0 +1,42 @@
+name: Synk arrangementer fra Places
+
+on:
+  schedule:
+    # 05:00, 11:00 og 17:00 UTC = 06, 12 og 18 norsk vintertid (07, 13, 19 sommertid)
+    - cron: "0 5,11,17 * * *"
+  # Lar deg kjøre jobben manuelt fra Actions-fanen
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: places-sync
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Hent fra Places
+        env:
+          PLACES_API_KEY: ${{ secrets.PLACES_API_KEY }}
+        run: node sync.mjs
+
+      - name: Lagre hvis noe er endret
+        run: |
+          git config user.name "places-sync"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/events.json
+          if git diff --staged --quiet; then
+            echo "Ingen endringer."
+          else
+            git commit -m "Synk $(date -u +'%Y-%m-%d %H:%M UTC')"
+            git push
+          fi
