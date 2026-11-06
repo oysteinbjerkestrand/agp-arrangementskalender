@@ -7,7 +7,7 @@
 import { writeFile, mkdir } from "node:fs/promises";
 
 const API = "https://places.nu/api/partner/events/";
-const IMAGE_PREFIX = "https://places.nu/media/__sized__/";
+const THUMB_PREFIX = "https://places.nu/media/__sized__/";
 const OUT_DIR = "docs";
 const OUT_FILE = `${OUT_DIR}/events.json`;
 
@@ -18,8 +18,38 @@ function isoToday() {
   return new Date().toISOString().slice(0, 10);
 }
 
+// Enlinjefelt: navn, arrangør, sted.
 function clean(text) {
   return String(text || "").replace(/\s+/g, " ").trim();
+}
+
+// Beskrivelser: behold linjeskiftene, de bærer struktur i programoppsett
+// og lister. Rydd bort alt annet overflødig mellomrom.
+function cleanText(text) {
+  return String(text || "")
+    .replace(/\r\n?/g, "\n")
+    .replace(/[^\S\n]+/g, " ")
+    .replace(/ *\n */g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+// Places legger bildet på event.image. Mangler det, arver arrangementet
+// stedets bilde. Vi tar vare på både full størrelse og forhåndsvisning.
+function pickImage(ev) {
+  const has = (o) => o && (o.url || o.thumbnail);
+  const img = (has(ev.image) ? ev.image : null)
+    || (ev.location && has(ev.location.image) ? ev.location.image : null);
+  if (!img) return null;
+
+  const strip = (url, prefix) =>
+    url && url.startsWith(prefix) ? url.slice(prefix.length) : url;
+
+  return {
+    thumb: strip(img.thumbnail || img.url, THUMB_PREFIX),
+    full: img.url || null,
+    credit: img.credit || null,
+  };
 }
 
 // Gjør om Places' format til det kompakte formatet kalenderen leser.
@@ -32,7 +62,7 @@ export function transform(events, today = isoToday()) {
 
     const row = {};
     row.n = clean(ev.name);
-    row.d = clean(ev.description);
+    row.d = cleanText(ev.description);
     row.s = ev.start_date.slice(0, 16);
     if (ev.end_date) row.e = ev.end_date.slice(11, 16);
 
@@ -62,10 +92,11 @@ export function transform(events, today = isoToday()) {
       row.cu = ev.community.url;
     }
 
-    if (ev.image && ev.image.thumbnail) {
-      row.i = ev.image.thumbnail.startsWith(IMAGE_PREFIX)
-        ? ev.image.thumbnail.slice(IMAGE_PREFIX.length)
-        : ev.image.thumbnail;
+    const img = pickImage(ev);
+    if (img) {
+      if (img.thumb) row.i = img.thumb;      // kortvisning, 600×400
+      if (img.full) row.iu = img.full;       // detaljvisning, originalen
+      if (img.credit) row.ic = clean(img.credit);
     }
 
     out.push(row);

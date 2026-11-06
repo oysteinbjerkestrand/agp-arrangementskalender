@@ -2,8 +2,9 @@ name: Synk arrangementer fra Places
 
 on:
   schedule:
-    # 05:00, 11:00 og 17:00 UTC = 06, 12 og 18 norsk vintertid (07, 13, 19 sommertid)
-    - cron: "0 5,11,17 * * *"
+    # Hver time. GitHub kan forsinke planlagte kjøringer noen minutter ved høy
+    # last, og i sjeldne tilfeller hoppe over én. Det tåler kalenderen fint.
+    - cron: "0 * * * *"
   # Lar deg kjøre jobben manuelt fra Actions-fanen
   workflow_dispatch:
 
